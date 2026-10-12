@@ -10,6 +10,7 @@ Variables d'environnement :
   TZ_NAME              fuseau horaire pour « aujourd'hui » (défaut Europe/Paris)
   NOTIFY_WHEN_NONE     "true" pour aussi notifier les jours sans renfo (défaut false)
   DRY_RUN              "true" pour afficher le message sans l'envoyer
+  TARGET_DATE          date à vérifier au format AAAA-MM-JJ (défaut : aujourd'hui)
 """
 
 import hashlib
@@ -18,7 +19,7 @@ import os
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 BASE_URLS = {
@@ -131,9 +132,9 @@ def format_duration(seconds):
 def build_message(today, strength, others):
     date_txt = today.strftime("%d/%m/%Y")
     if not strength:
-        lines = [f"😴 Pas de renfo prévu aujourd'hui ({date_txt})."]
+        lines = [f"😴 Pas de renfo prévu ({date_txt})."]
     else:
-        lines = [f"💪 **Renfo prévu aujourd'hui ({date_txt}) !**"]
+        lines = [f"💪 **Renfo prévu ({date_txt}) !**"]
         for w in strength:
             duration = format_duration(w["duration"])
             lines.append(f"• **{w['name']}**" + (f" — {duration}" if duration else ""))
@@ -160,7 +161,11 @@ def main():
 
     region = os.environ.get("COROS_REGION", "eu").strip().lower() or "eu"
     base = BASE_URLS.get(region, BASE_URLS["eu"])
-    today = datetime.now(ZoneInfo(os.environ.get("TZ_NAME") or "Europe/Paris")).date()
+    target = os.environ.get("TARGET_DATE", "").strip()
+    if target:
+        today = date.fromisoformat(target)
+    else:
+        today = datetime.now(ZoneInfo(os.environ.get("TZ_NAME") or "Europe/Paris")).date()
     day = today.strftime("%Y%m%d")
 
     token, user_id = login(base, email, password)
@@ -168,6 +173,8 @@ def main():
     strength = [w for w in workouts if is_strength(w)]
     others = [w for w in workouts if not is_strength(w)]
     print(f"{day} : {len(workouts)} séance(s), dont {len(strength)} de renfo")
+    for w in workouts:
+        print(f"  - {w['name']} (sportType={w['sport_type']})")
 
     if not strength and not env_flag("NOTIFY_WHEN_NONE"):
         print("Pas de renfo aujourd'hui, pas de notif.")

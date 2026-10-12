@@ -7,6 +7,11 @@ on:
     - cron: "0 5 * * *"
     - cron: "0 6 * * *"
   workflow_dispatch:
+    inputs:
+      date:
+        description: "Date à vérifier (AAAA-MM-JJ), vide = aujourd'hui"
+        required: false
+        default: ""
 
 jobs:
   check:
@@ -43,4 +48,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           COROS_REGION: ${{ vars.COROS_REGION || 'eu' }}
           NOTIFY_WHEN_NONE: ${{ vars.NOTIFY_WHEN_NONE || 'false' }}
+          TARGET_DATE: ${{ inputs.date }}
         run: python check_renfo.py
