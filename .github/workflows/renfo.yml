@@ -1,0 +1,46 @@
+name: Check renfo du jour
+
+on:
+  schedule:
+    # Les crons GitHub sont en UTC : 7h à Paris = 5h UTC (heure d'été) ou 6h UTC (heure d'hiver).
+    # Les deux tournent, le job ne garde que celui qui correspond à 7h à Paris.
+    - cron: "0 5 * * *"
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Garder seulement le run de 7h (heure de Paris)
+        id: gate
+        run: |
+          offset=$(TZ=Europe/Paris date +%z)
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$offset" = "+0200" ] && [ "${{ github.event.schedule }}" = "0 5 * * *" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$offset" = "+0100" ] && [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Pas le bon créneau (offset $offset), on saute."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Lire Coros et notifier Discord
+        if: steps.gate.outputs.run == 'true'
+        env:
+          COROS_EMAIL: ${{ secrets.COROS_EMAIL }}
+          COROS_PASSWORD: ${{ secrets.COROS_PASSWORD }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COROS_REGION: ${{ vars.COROS_REGION || 'eu' }}
+          NOTIFY_WHEN_NONE: ${{ vars.NOTIFY_WHEN_NONE || 'false' }}
+        run: python check_renfo.py
