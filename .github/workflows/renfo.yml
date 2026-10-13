@@ -2,10 +2,12 @@ name: Check renfo du jour
 
 on:
   schedule:
-    # Les crons GitHub sont en UTC : 7h à Paris = 5h UTC (heure d'été) ou 6h UTC (heure d'hiver).
-    # Les deux tournent, le job ne garde que celui qui correspond à 7h à Paris.
-    - cron: "0 5 * * *"
-    - cron: "0 6 * * *"
+    # Les crons GitHub sont en UTC : ~7h à Paris = 4h53 UTC (heure d'été) ou 5h53 UTC (heure d'hiver).
+    # Les deux tournent, le job ne garde que celui qui correspond à l'heure de Paris.
+    # Minute 53 plutôt que :00 : GitHub retarde ou saute souvent les crons pile à l'heure,
+    # et les quelques minutes de retard habituelles font arriver la notif vers 7h.
+    - cron: "53 4 * * *"
+    - cron: "53 5 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -23,9 +25,9 @@ jobs:
           offset=$(TZ=Europe/Paris date +%z)
           if [ "${{ github.event_name }}" != "schedule" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$offset" = "+0200" ] && [ "${{ github.event.schedule }}" = "0 5 * * *" ]; then
+          elif [ "$offset" = "+0200" ] && [ "${{ github.event.schedule }}" = "53 4 * * *" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$offset" = "+0100" ] && [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+          elif [ "$offset" = "+0100" ] && [ "${{ github.event.schedule }}" = "53 5 * * *" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "Pas le bon créneau (offset $offset), on saute."
