@@ -32,3 +32,19 @@ COROS_EMAIL=... COROS_PASSWORD=... DRY_RUN=true python check_renfo.py
 ```
 
 ⚠️ L'API utilisée est celle (non officielle) de Coros Training Hub : elle peut changer sans prévenir.
+
+## Déclenchement à l'heure pile avec cron-job.org
+
+Les crons GitHub peuvent avoir du retard ou sauter. Pour une notif fiable avant 7h,
+cron-job.org peut déclencher le workflow lui-même :
+
+1. Crée un token GitHub *fine-grained* (Settings → Developer settings → Fine-grained tokens) :
+   accès au seul dépôt `renfo_muscu`, permission **Actions : Read and write**.
+2. Sur cron-job.org, crée un cron job :
+   - URL : `https://api.github.com/repos/remitrev/renfo_muscu/actions/workflows/renfo.yml/dispatches`
+   - Horaire : tous les jours à 6h45, fuseau `Europe/Paris`
+   - Méthode `POST`, en-têtes `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
+     `Content-Type: application/json`
+   - Corps : `{"ref":"main","inputs":{"once":"true"}}`
+
+Avec `once`, rien n'est envoyé si une tentative GitHub a déjà fait la vérification du jour.
