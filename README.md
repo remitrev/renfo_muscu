@@ -1,8 +1,12 @@
 # renfo_muscu
 
-Tous les jours à 7h (heure de Paris), une GitHub Action lit ton calendrier
+Tous les matins avant 7h (heure de Paris), une GitHub Action lit ton calendrier
 d'entraînement Coros et t'envoie une notif Discord si une séance de renfo
 est prévue ce jour-là.
+
+GitHub retarde ou saute souvent les lancements planifiés : le workflow est donc
+programmé plusieurs fois entre 5h20 et 7h, et seule la première tentative qui
+passe envoie la notif (les suivantes voient qu'elle est déjà partie).
 
 ## Mise en place
 

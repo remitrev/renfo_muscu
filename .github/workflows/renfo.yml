@@ -2,36 +2,54 @@ name: Check renfo du jour
 
 on:
   schedule:
-    # Les crons GitHub sont en UTC : ~7h à Paris = 4h53 UTC (heure d'été) ou 5h53 UTC (heure d'hiver).
-    # Les deux tournent, le job ne garde que celui qui correspond à l'heure de Paris.
-    # Minute 53 plutôt que :00 : GitHub retarde ou saute souvent les crons pile à l'heure,
-    # et les quelques minutes de retard habituelles font arriver la notif vers 7h.
-    - cron: "53 4 * * *"
-    - cron: "53 5 * * *"
+    # Les crons GitHub (en UTC) sont souvent retardés, voire sautés. On tente donc
+    # plusieurs fois tôt le matin : la première tentative qui passe envoie la notif,
+    # les suivantes voient qu'elle est déjà partie (cache du jour) et ne font rien.
+    # Heure d'été : 5h23, 5h53, 6h23, 6h53 à Paris. Heure d'hiver : 4h23, 4h53 (ignorées), 5h23, 5h53.
+    - cron: "23 3,4 * * *"
+    - cron: "53 3,4 * * *"
   workflow_dispatch:
     inputs:
       date:
         description: "Date à vérifier (AAAA-MM-JJ), vide = aujourd'hui"
         required: false
         default: ""
+      once:
+        description: "Ne rien envoyer si la notif du jour est déjà partie (pour un déclenchement externe)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Garder seulement le run de 7h (heure de Paris)
+      - name: Date et heure à Paris
+        id: paris
+        run: |
+          echo "day=$(TZ=Europe/Paris date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "hour=$(TZ=Europe/Paris date +%-H)" >> "$GITHUB_OUTPUT"
+
+      - name: Notif du jour déjà envoyée ?
+        id: sent
+        if: github.event_name == 'schedule' || inputs.once
+        uses: actions/cache/restore@v4
+        with:
+          path: .renfo-sent
+          key: renfo-sent-${{ steps.paris.outputs.day }}
+          lookup-only: true
+
+      - name: Décider si on lance
         id: gate
         run: |
-          offset=$(TZ=Europe/Paris date +%z)
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$offset" = "+0200" ] && [ "${{ github.event.schedule }}" = "53 4 * * *" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$offset" = "+0100" ] && [ "${{ github.event.schedule }}" = "53 5 * * *" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Pas le bon créneau (offset $offset), on saute."
+          if [ "${{ steps.sent.outputs.cache-hit }}" = "true" ]; then
+            echo "Notif du jour déjà envoyée, on saute."
             echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "schedule" ] && [ "${{ steps.paris.outputs.hour }}" -lt 5 ]; then
+            echo "Trop tôt à Paris (${{ steps.paris.outputs.hour }}h), on saute."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v4
@@ -52,3 +70,13 @@ jobs:
           NOTIFY_WHEN_NONE: ${{ vars.NOTIFY_WHEN_NONE || 'false' }}
           TARGET_DATE: ${{ inputs.date }}
         run: python check_renfo.py
+
+      - name: Marquer la notif du jour comme envoyée
+        if: steps.gate.outputs.run == 'true' && !inputs.date
+        run: mkdir -p .renfo-sent && date > .renfo-sent/sent
+
+      - uses: actions/cache/save@v4
+        if: steps.gate.outputs.run == 'true' && !inputs.date
+        with:
+          path: .renfo-sent
+          key: renfo-sent-${{ steps.paris.outputs.day }}
